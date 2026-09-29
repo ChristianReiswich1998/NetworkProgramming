@@ -35,8 +35,7 @@ static void handle_errors(const char* msg) {
 
 
 static void create_socket(Server* server) {
-        server->sockfd = socket(IPV4, TCP, 0);
-        if (server->sockfd < 0) handle_errors("Init Socket failed!\n");
+        if ((server->sockfd = socket(IPV4, TCP, 0)) < 0) handle_errors("Init Socket failed!\n");
         const int opt = 1;
         setsockopt(server->sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 }
@@ -68,22 +67,22 @@ static void accept_client(Server* server) {
 
         const char* welcome = "Welcome to my Server!\n";
         send(server->clientSocket, welcome, strlen(welcome), 0);
-
-        /*
-        if (server->clientSocket < 0) {
-                handle_errors("Client");
-        } else {
-                char buffer[1024] = {0};
-                recv(server->clientSocket, buffer, sizeof(buffer), 0);
-                printf("Message from Client: %s\n", buffer);
-        }
-        */
 }
 
 
+static void get_msg(const Server* server) {
+        char buffer[1024];
+        const ssize_t recv_bytes = recv(server->clientSocket, buffer, sizeof(buffer) - 1, 0);
+        if (recv_bytes < 0) {
+                handle_errors("ERROR: Getting Message failed!\n");
+        }
+
+        buffer[recv_bytes] = '\0';
+        printf("Message from Client: %s\n", buffer);
+}
 
 
-int main(int argc, char* argv[]) {
+int main(void/*int argc, char* argv[]*/) {
         printf("Server!\n");
 
         Server server;
@@ -91,6 +90,7 @@ int main(int argc, char* argv[]) {
         define_server_addr(&server);
         bind_socket_to_addr(&server);
         accept_client(&server);
+        get_msg(&server);
         close(server.sockfd);
 
         return 0;
