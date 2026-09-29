@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <err.h>
+#include <arpa/inet.h>
 
 #define PORT       9000
 #define LOCAL_HOST AF_LOCAL
@@ -24,6 +25,8 @@
 typedef struct {
         int server_fd;
         int client_fd;
+        int sock;
+        struct sockaddr_in addr;
         struct sockaddr_in server_addr;
         struct sockaddr_in client_addr;
 } Node;
@@ -45,11 +48,12 @@ static void run_server(Node* node) {
                 handle_errors("ERROR: set socket!\n");
         }
 
-        node->server_addr.sin_family      = IPV4;
-        node->server_addr.sin_port        = htons(PORT);
-        node->server_addr.sin_addr.s_addr = INADDR_ANY;
+        memset(&node->addr, 0, sizeof(node->addr));
+        node->addr.sin_family      = IPV4;
+        node->addr.sin_port        = htons(PORT);
+        node->addr.sin_addr.s_addr = INADDR_ANY;
 
-        if (bind(node->server_fd, (struct sockaddr*)&node->server_addr, sizeof(node->server_addr)) < 0) {
+        if (bind(node->server_fd, (struct sockaddr*)&node->addr, sizeof(node->addr)) < 0) {
                 handle_errors("ERROR: bind!\n");
         }
 
@@ -80,7 +84,30 @@ static void run_server(Node* node) {
         close(node->server_fd);
 }
 
+static void run_client(Node* node, const char* server_ip) {
+        if ((node->sock = socket(IPV4, TCP, 0)) < 0) handle_errors("ERROR: create client");
 
+        memset(&node->server_addr, 0, sizeof(node->server_addr));
+        node->server_addr.sin_family      = IPV4;
+        node->server_addr.sin_port        = htons(PORT);
+
+        if (inet_pton(IPV4, server_ip, &node->server_addr.sin_addr) <= 0) {
+                handle_errors("ERROR: Invalid Address / Address not supported");
+        }
+
+        if (connect(node->sock, (struct sockaddr*)&node->server_addr, sizeof(node->server_addr)) < 0) {
+                handle_errors("ERROR: Connection failed!\n");
+        }
+
+        char buf[1024] = {0};
+        const ssize_t recv_bytes = recv(node->sock, buf, sizeof(buf) - 1, 0);
+        if (recv_bytes < 0) {
+               handle_errors("ERROR: ");
+        }
+
+        buf[recv_bytes] = '\0';
+        printf("Server replied: %s\n", buf);
+}
 
 
 
@@ -89,6 +116,7 @@ int main(int argc, char* argv[]) {
 
         Node node;
         run_server(&node);
+        run_client(&node, "127.0.0.1");
 
         return 0;
 }
