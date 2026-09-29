@@ -92,6 +92,7 @@ int main(void/*int argc, char* argv[]*/) {
         accept_client(&server);
         get_msg(&server);
         close(server.sockfd);
+        close(server.clientSocket);
 
         return 0;
 }
