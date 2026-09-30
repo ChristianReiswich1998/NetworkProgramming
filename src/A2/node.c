@@ -1,48 +1,20 @@
 /***********************************************************************************************************************
  * @author Christian Reiswich
  * @created on 29.09.2026
- * @brief Server
+ * @brief P2P - Node
  * ********************************************************************************************************************/
 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <pthread.h>
-#include <sys/errno.h>
-
-#define PORT       9000
-#define LOCAL_HOST AF_LOCAL
-#define IPv4       AF_INET
-#define IPv6       AF_INET6
-#define TCP        SOCK_STREAM
-#define UDP        SOCK_DGRAM
-#define BOOL       int
-#define TRUE       1
-#define FALSE      0
-
-typedef struct {
-        int server_fd;
-        int client_fd;
-        int sock;
-        int is_ready;
-        struct sockaddr_in addr;
-        pthread_mutex_t lock;
-        pthread_cond_t  ok_to_send; // Condition: Client ok to send
-} Node;
+#include "node.h"
 
 
-static void handle_errors(const char* msg) {
+void handle_errors(const char* msg) {
         perror(msg);
         exit(EXIT_FAILURE);
 }
 
 
-static Node* init_node(void) {
+Node* init_node(void) {
         Node* node = malloc(sizeof(Node));
         if (node == NULL)
                 handle_errors("ERROR");
@@ -55,7 +27,7 @@ static Node* init_node(void) {
 }
 
 
-static void delete_node(Node* node) {
+void delete_node(Node* node) {
         if (node == NULL) return;
 
         pthread_mutex_destroy(&node->lock);
@@ -64,11 +36,71 @@ static void delete_node(Node* node) {
 }
 
 
-static void* run_server(void *arg) {
+void run_event_loop(Node* node) {
+#if defined(__linux__)
+        node->epoll_fd = epoll_create(1);
+        struct epoll_event event;
+        struct epoll_event events[MAX_EPOLL_EVENTS];
+        event.events = EPOLLIN;
+        event.data.fd = node->server_fd;
+        epoll_ctl(node->epoll_fd, EPOLL_CTL_ADD, node->server_fd, &event);
+
+        while (1) {
+                int num_events = epoll_wait(node->epoll_fd, events, MAX_EPOLL_EVENTS, -1);
+                if (num_events == -1) {
+                        handle_errors("ERROR");
+                        break;
+                }
+
+                for (int i=0; i< num_events; i++) {
+                        if (events[i].data.fd == node->server_fd) {
+                                struct sockaddr_in client_addr;
+                                socklen_t client_len = sizeof(client_addr);
+
+                                node->client_fd = accept(node->server_fd, (struct sockaddr*)&client_addr, &client_len);
+                                if (node->client_fd < 0)
+                                        handle_errors("ERROR");
+                                else {
+                                        event.data.fd = node->client_fd;
+                                        epoll_ctl(node->epoll_fd, EPOLL_CTL_ADD, node->client_fd, &event);
+                                }
+                        } else {
+                                char buf[1024] = {0};
+                                const ssize_t recv_bytes = recv(events[i].data.fd, buf, sizeof(buf) - 1, 0);
+
+                                if (recv_bytes > 0) {
+                                        buf[recv_bytes] = '\0';
+                                        printf("Server Node: %s\n", buf);
+                                }
+
+                                else if (recv_bytes == 0) {
+                                        printf("Connection is closed!\n");
+                                        close(events[i].data.fd);
+                                }
+
+                                else if (recv_bytes < 0)
+                                        handle_errors("ERROR");
+                        }
+                }
+        }
+
+#elif defined(__APPLE__)
+        // kevent(...)
+#else
+        // poll(...) als Fallback
+#endif
+}
+
+
+void* run_server(void *arg) {
         Node* node = arg;
 
-        if ((node->server_fd = socket(IPv4, TCP, 0)) < 0)
+        if ((node->server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
                 handle_errors("ERROR");
+
+        if (fcntl(node->server_fd, F_SETFL, fcntl(node->server_fd, F_GETFL, 0) | O_NONBLOCK) == -1) {
+                handle_errors("ERROR");
+        }
 
         const int opt = 1;
         if (setsockopt(node->server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
@@ -93,30 +125,7 @@ static void* run_server(void *arg) {
 
         printf("[Server] Node listening on port %d\n", PORT);
 
-        struct sockaddr_in client_addr;
-        socklen_t client_len = sizeof(client_addr);
-
-        node->client_fd = accept(node->server_fd, (struct sockaddr*)&client_addr, &client_len);
-        if (node->client_fd < 0)
-                handle_errors("ERROR");
-
-        char buf[1024] = {0};
-        const ssize_t recv_bytes = recv(node->client_fd, buf, sizeof(buf) - 1, 0);
-
-        if (recv_bytes > 0) {
-                buf[recv_bytes] = '\0';
-                printf("Server Node: %s\n", buf);
-        }
-
-        else if (recv_bytes == 0) {
-                printf("Connection is closed!\n");
-                close(node->client_fd);
-                close(node->server_fd);
-                return NULL;
-        }
-
-        else if (recv_bytes < 0)
-                handle_errors("ERROR");
+        run_event_loop(node);
 
         const char* replay = "Hello back from Server Node!\n";
         send(node->client_fd, replay, strlen(replay), 0);
@@ -126,7 +135,8 @@ static void* run_server(void *arg) {
         return NULL;
 }
 
-static void run_client(Node* node, const char* server_ip) {
+
+void run_client(Node* node, const char* server_ip) {
         pthread_mutex_lock(&node->lock);
         while (node->is_ready == FALSE) {
                 pthread_cond_wait(&node->ok_to_send, &node->lock);
@@ -188,7 +198,6 @@ static void run_client(Node* node, const char* server_ip) {
 
         close(node->sock);
 }
-
 
 
 int main(void/*int argc, char* argv[]*/) {
