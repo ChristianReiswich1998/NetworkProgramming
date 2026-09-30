@@ -13,6 +13,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#include <sys/errno.h>
 
 #define PORT       9000
 #define LOCAL_HOST AF_LOCAL
@@ -44,7 +45,7 @@ static void handle_errors(const char* msg) {
 static Node* init_node(void) {
         Node* node = malloc(sizeof(Node));
         if (node == NULL)
-                handle_errors("ERROR: Allocate Node failed!\n");
+                handle_errors("ERROR");
 
         memset(node, 0, sizeof(Node));
         pthread_mutex_init(&node->lock, NULL);
@@ -67,11 +68,11 @@ static void* run_server(void *arg) {
         Node* node = arg;
 
         if ((node->server_fd = socket(IPv4, TCP, 0)) < 0)
-                handle_errors("ERROR: Socket failed!\n");
+                handle_errors("ERROR");
 
         const int opt = 1;
         if (setsockopt(node->server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-                handle_errors("ERROR: set socket!\n");
+                handle_errors("ERROR");
         }
 
         memset(&node->addr, 0, sizeof(node->addr));
@@ -80,10 +81,10 @@ static void* run_server(void *arg) {
         node->addr.sin_addr.s_addr = INADDR_ANY;
 
         if (bind(node->server_fd, (struct sockaddr*)&node->addr, sizeof(node->addr)) < 0)
-                handle_errors("ERROR: bind!\n");
+                handle_errors("ERROR");
 
         if (listen(node->server_fd, 5) < 0)
-                handle_errors("ERROR: listen!\n");
+                handle_errors("ERROR");
 
         pthread_mutex_lock(&node->lock);
         node->is_ready = TRUE;
@@ -97,7 +98,7 @@ static void* run_server(void *arg) {
 
         node->client_fd = accept(node->server_fd, (struct sockaddr*)&client_addr, &client_len);
         if (node->client_fd < 0)
-                handle_errors("ERROR: accept\n");
+                handle_errors("ERROR");
 
         char buf[1024] = {0};
         const ssize_t recv_bytes = recv(node->client_fd, buf, sizeof(buf) - 1, 0);
@@ -115,7 +116,7 @@ static void* run_server(void *arg) {
         }
 
         else if (recv_bytes < 0)
-                handle_errors("ERROR: Network Errors");
+                handle_errors("ERROR");
 
         const char* replay = "Hello back from Server Node!\n";
         send(node->client_fd, replay, strlen(replay), 0);
@@ -133,7 +134,7 @@ static void run_client(Node* node, const char* server_ip) {
         pthread_mutex_unlock(&node->lock);
 
         if ((node->sock = socket(IPv4, TCP, 0)) < 0)
-                handle_errors("ERROR: create client\n");
+                handle_errors("ERROR");
 
         struct sockaddr_in server_addr;
         memset(&server_addr, 0, sizeof(server_addr));
@@ -141,13 +142,33 @@ static void run_client(Node* node, const char* server_ip) {
         server_addr.sin_port   = htons(PORT);
 
         if (inet_pton(IPv4, server_ip, &server_addr.sin_addr) <= 0)
-                handle_errors("ERROR: Invalid Address / Address not supported\n");
+                handle_errors("ERROR");
 
         if (connect(node->sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0)
-                handle_errors("ERROR: Connection failed!\n");
+                handle_errors("ERROR");
 
         const char* msg = "Hello from client Node!\n";
-        send(node->sock, msg, strlen(msg), 0);
+        ssize_t send_bytes = send(node->sock, msg, strlen(msg), 0);
+        ssize_t total_send_bytes = send_bytes;
+
+
+        while (total_send_bytes < strlen(msg)) {
+                if (send_bytes == - 1) {
+                        handle_errors("ERROR");
+                        break;
+                }
+
+                if (send_bytes == 0) {
+                        handle_errors("ERROR");
+                        break;
+                }
+
+                if (send_bytes > 0) {
+                        const int remaining_bytes = strlen(msg) - total_send_bytes;
+                        send_bytes = send(node->sock, msg + total_send_bytes, remaining_bytes, 0);
+                        total_send_bytes += send_bytes;
+                }
+        }
 
         char buf[1024] = {0};
         const ssize_t recv_bytes = recv(node->sock, buf, sizeof(buf) - 1, 0);
