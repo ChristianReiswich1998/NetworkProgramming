@@ -40,13 +40,13 @@ void run_event_loop(Node* node) {
 #if defined(__linux__)
         node->epoll_fd = epoll_create(1);
         struct epoll_event event;
-        struct epoll_event events[MAX_EPOLL_EVENTS];
+        struct epoll_event events[MAX_EVENTS];
         event.events = EPOLLIN;
         event.data.fd = node->server_fd;
         epoll_ctl(node->epoll_fd, EPOLL_CTL_ADD, node->server_fd, &event);
 
         while (1) {
-                int num_events = epoll_wait(node->epoll_fd, events, MAX_EPOLL_EVENTS, -1);
+                const int num_events = epoll_wait(node->epoll_fd, events, MAX_EVENTS, -1);
                 if (num_events == -1) {
                         handle_errors("ERROR");
                         break;
@@ -85,7 +85,55 @@ void run_event_loop(Node* node) {
         }
 
 #elif defined(__APPLE__)
-        // kevent(...)
+        node->kqueue_fd = kqueue();
+        struct kevent change;
+        struct kevent events[MAX_EVENTS];
+        // Helper macro to initialize EVFILT_READ with EV_ADD and EV_ENABLE
+        EV_SET(&change, node->server_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
+
+        if (kevent(node->kqueue_fd, &change, 1, NULL, 0, NULL) < 0) {
+                handle_errors("ERROR");
+                close(node->kqueue_fd);
+        }
+
+        while (1) {
+                const int num_events = kevent(node->kqueue_fd, NULL, 0, events, 10, NULL);
+                if (num_events == -1) {
+                        handle_errors("ERROR");
+                        break;
+                }
+
+                for (int i=0; i< num_events; i++) {
+                        if (events[i].ident == node->server_fd) {
+                                struct sockaddr_in client_addr;
+                                socklen_t client_len = sizeof(client_addr);
+
+                                node->client_fd = accept(node->server_fd, (struct sockaddr*)&client_addr, &client_len);
+                                if (node->client_fd < 0)
+                                        handle_errors("ERROR");
+                                else {
+                                        EV_SET(&change, node->client_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
+                                        kevent(node->kqueue_fd, &change, 1, NULL, 0, NULL);
+                                }
+                        } else {
+                                char buf[1024] = {0};
+                                const ssize_t recv_bytes = recv(events[i].ident, buf, sizeof(buf) - 1, 0);
+
+                                if (recv_bytes > 0) {
+                                        buf[recv_bytes] = '\0';
+                                        printf("Server Node: %s\n", buf);
+                                }
+
+                                else if (recv_bytes == 0) {
+                                        printf("Connection is closed!\n");
+                                        close(events[i].ident);
+                                }
+
+                                else if (recv_bytes < 0)
+                                        handle_errors("ERROR");
+                        }
+                }
+        }
 #else
         // poll(...) als Fallback
 #endif
@@ -160,7 +208,6 @@ void run_client(Node* node, const char* server_ip) {
         const char* msg = "Hello from client Node!\n";
         ssize_t send_bytes = send(node->sock, msg, strlen(msg), 0);
         ssize_t total_send_bytes = send_bytes;
-
 
         while (total_send_bytes < strlen(msg)) {
                 if (send_bytes == - 1) {

@@ -44,13 +44,14 @@
 #define BOOL       int
 #define TRUE       1
 #define FALSE      0
-#define MAX_EPOLL_EVENTS 64
+#define MAX_EVENTS 64
 
 
 typedef struct {
         int server_fd;
         int client_fd;
-        int epoll_fd;
+        int epoll_fd; // OS: Linux
+        int kqueue_fd; // OS: MacOs, BSD
         int sock;
         int is_ready;
         struct sockaddr_in addr;
