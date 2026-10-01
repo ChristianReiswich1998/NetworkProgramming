@@ -135,9 +135,6 @@ void run_event_loop(Node* node) {
 }
 
 
-
-
-
 void* run_server(void *arg) {
         Node* node = arg;
 

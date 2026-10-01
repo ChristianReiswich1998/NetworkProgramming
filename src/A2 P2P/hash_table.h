@@ -26,18 +26,22 @@ typedef struct {
         uint8_t other_node[KEY_SIZE];
         uint8_t distance[KEY_SIZE];
         uint8_t id;
-        int K_bucket[160][2];
-        int hash;
+        int K_bucket[BUCKET_SIZE][2];
+        uint8_t index;
+
 } Table;
 
 
 
 Table* init_table(void);
 void delete_table(Table* table);
-void print_hex_array(uint8_t val[], const char* value);
-void xor_distance(Table* table);
-void add_node_to_bucket(Table* table);
+
+void xor_distance(Table* table, uint8_t node[KEY_SIZE]);
+void add_node_to_k_bucket(Table* table);
+
 void print_k_bucket(const Table* table);
+void print_hex_array(uint8_t val[], const char* value);
+char* hex_to_binary(const Table* table);
 
 
 
