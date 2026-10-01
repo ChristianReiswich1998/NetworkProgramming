@@ -8,16 +8,10 @@
 #include "node.h"
 
 
-void handle_errors(const char* msg) {
-        perror(msg);
-        exit(EXIT_FAILURE);
-}
-
-
 Node* init_node(void) {
         Node* node = malloc(sizeof(Node));
         if (node == NULL)
-                handle_errors("ERROR");
+                handle_errors();
 
         memset(node, 0, sizeof(Node));
         pthread_mutex_init(&node->lock, NULL);
@@ -85,21 +79,22 @@ void run_event_loop(Node* node) {
         }
 
 #elif defined(__APPLE__)
-        node->kqueue_fd = kqueue();
+        if ((node->kqueue_fd = kqueue()) < 0)
+                handle_errors();
         struct kevent change;
         struct kevent events[MAX_EVENTS];
         // Helper macro to initialize EVFILT_READ with EV_ADD and EV_ENABLE
         EV_SET(&change, node->server_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
 
         if (kevent(node->kqueue_fd, &change, 1, NULL, 0, NULL) < 0) {
-                handle_errors("ERROR");
+                handle_errors();
                 close(node->kqueue_fd);
         }
 
         while (1) {
                 const int num_events = kevent(node->kqueue_fd, NULL, 0, events, 10, NULL);
                 if (num_events == -1) {
-                        handle_errors("ERROR");
+                        handle_errors();
                         break;
                 }
 
@@ -110,7 +105,7 @@ void run_event_loop(Node* node) {
 
                                 node->client_fd = accept(node->server_fd, (struct sockaddr*)&client_addr, &client_len);
                                 if (node->client_fd < 0)
-                                        handle_errors("ERROR");
+                                        handle_errors();
                                 else {
                                         EV_SET(&change, node->client_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
                                         kevent(node->kqueue_fd, &change, 1, NULL, 0, NULL);
@@ -130,7 +125,7 @@ void run_event_loop(Node* node) {
                                 }
 
                                 else if (recv_bytes < 0)
-                                        handle_errors("ERROR");
+                                        handle_errors();
                         }
                 }
         }
@@ -140,19 +135,22 @@ void run_event_loop(Node* node) {
 }
 
 
+
+
+
 void* run_server(void *arg) {
         Node* node = arg;
 
         if ((node->server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-                handle_errors("ERROR");
+                handle_errors();
 
         if (fcntl(node->server_fd, F_SETFL, fcntl(node->server_fd, F_GETFL, 0) | O_NONBLOCK) == -1) {
-                handle_errors("ERROR");
+                handle_errors();
         }
 
         const int opt = 1;
         if (setsockopt(node->server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-                handle_errors("ERROR");
+                handle_errors();
         }
 
         memset(&node->addr, 0, sizeof(node->addr));
@@ -161,10 +159,10 @@ void* run_server(void *arg) {
         node->addr.sin_addr.s_addr = INADDR_ANY;
 
         if (bind(node->server_fd, (struct sockaddr*)&node->addr, sizeof(node->addr)) < 0)
-                handle_errors("ERROR");
+                handle_errors();
 
         if (listen(node->server_fd, 5) < 0)
-                handle_errors("ERROR");
+                handle_errors();
 
         pthread_mutex_lock(&node->lock);
         node->is_ready = TRUE;
@@ -192,7 +190,7 @@ void run_client(Node* node, const char* server_ip) {
         pthread_mutex_unlock(&node->lock);
 
         if ((node->sock = socket(IPv4, TCP, 0)) < 0)
-                handle_errors("ERROR");
+                handle_errors();
 
         struct sockaddr_in server_addr;
         memset(&server_addr, 0, sizeof(server_addr));
@@ -200,10 +198,10 @@ void run_client(Node* node, const char* server_ip) {
         server_addr.sin_port   = htons(PORT);
 
         if (inet_pton(IPv4, server_ip, &server_addr.sin_addr) <= 0)
-                handle_errors("ERROR");
+                handle_errors();
 
         if (connect(node->sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0)
-                handle_errors("ERROR");
+                handle_errors();
 
         const char* msg = "Hello from client Node!\n";
         ssize_t send_bytes = send(node->sock, msg, strlen(msg), 0);
@@ -211,12 +209,12 @@ void run_client(Node* node, const char* server_ip) {
 
         while (total_send_bytes < strlen(msg)) {
                 if (send_bytes == - 1) {
-                        handle_errors("ERROR");
+                        handle_errors();
                         break;
                 }
 
                 if (send_bytes == 0) {
-                        handle_errors("ERROR");
+                        handle_errors();
                         break;
                 }
 
@@ -234,14 +232,14 @@ void run_client(Node* node, const char* server_ip) {
                 printf("Server replied: %s\n", buf);
         }
 
-        else if (recv_bytes == 0) {
+        else if (recv_bytes == CON_CLOSED) {
                 printf("Connection is closed!\n");
                 close(node->sock);
                 return;
         }
 
         else if (recv_bytes < 0)
-                handle_errors("ERROR: Network Errors\n");
+                handle_errors();
 
         close(node->sock);
 }
@@ -254,7 +252,7 @@ int main(void/*int argc, char* argv[]*/) {
         pthread_t server_thread_id;
 
         if (pthread_create(&server_thread_id, NULL, run_server, node) != 0)
-                handle_errors("ERROR: Thread creation failed!\n");
+                handle_errors();
 
         run_client(node, "127.0.0.1");
         pthread_join(server_thread_id, NULL);

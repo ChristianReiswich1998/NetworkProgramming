@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "includes.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,7 +18,6 @@
 #include <sys/errno.h>
 #include <resolv.h>
 #include <fcntl.h>
-
 
 #if defined(__linux__)
     #include <sys/epoll.h>
@@ -31,7 +31,7 @@
     #include <windows.h>
     #define PLATFORM "Windows (IOCP)"
 #else
-    #error "Nicht unterstütztes Betriebssystem"
+    #error "Not supported OS"
 #endif
 
 
@@ -41,9 +41,6 @@
 #define IPv6       AF_INET6
 #define TCP        SOCK_STREAM
 #define UDP        SOCK_DGRAM
-#define BOOL       int
-#define TRUE       1
-#define FALSE      0
 #define MAX_EVENTS 64
 
 
@@ -61,7 +58,6 @@ typedef struct {
 
 
 
-void handle_errors(const char* msg);
 Node* init_node(void);
 void delete_node(Node* node);
 void* run_server(void *arg);

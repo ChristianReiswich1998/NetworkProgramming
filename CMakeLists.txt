@@ -3,4 +3,4 @@ project(NetworkProgramming C)
 
 set(CMAKE_C_STANDARD 11)
 
-add_executable(NetworkProgramming src/A1/server.c)
+add_executable(NetworkProgramming "src/A1 Client Server/server.c")
