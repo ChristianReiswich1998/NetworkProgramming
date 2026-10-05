@@ -6,6 +6,7 @@
 
 
 #include "node.h"
+#include <stdbool.h>
 
 
 Node* init_node(void) {
@@ -83,7 +84,6 @@ void run_event_loop(Node* node) {
                 handle_errors();
         struct kevent change;
         struct kevent events[MAX_EVENTS];
-        // Helper macro to initialize EVFILT_READ with EV_ADD and EV_ENABLE
         EV_SET(&change, node->server_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
 
         if (kevent(node->kqueue_fd, &change, 1, NULL, 0, NULL) < 0) {
@@ -162,7 +162,7 @@ void* run_server(void *arg) {
                 handle_errors();
 
         pthread_mutex_lock(&node->lock);
-        node->is_ready = TRUE;
+        node->is_ready = true;
         pthread_cond_signal(&node->ok_to_send);
         pthread_mutex_unlock(&node->lock);
 
@@ -181,7 +181,7 @@ void* run_server(void *arg) {
 
 void run_client(Node* node, const char* server_ip) {
         pthread_mutex_lock(&node->lock);
-        while (node->is_ready == FALSE) {
+        while (node->is_ready == false) {
                 pthread_cond_wait(&node->ok_to_send, &node->lock);
         }
         pthread_mutex_unlock(&node->lock);
@@ -240,6 +240,9 @@ void run_client(Node* node, const char* server_ip) {
 
         close(node->sock);
 }
+
+
+
 
 
 int main(void/*int argc, char* argv[]*/) {

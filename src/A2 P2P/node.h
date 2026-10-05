@@ -57,7 +57,6 @@ typedef struct {
 } Node;
 
 
-
 Node* init_node(void);
 void delete_node(Node* node);
 void* run_server(void *arg);

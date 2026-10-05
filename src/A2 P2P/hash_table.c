@@ -11,6 +11,7 @@
 void init_table(Table* table) {
         if (table == NULL) return;
         memset(table, 0, sizeof(Table));
+        table->id = 1;
 }
 
 
@@ -24,15 +25,13 @@ void print_hex_array(uint8_t val[], const char* value) {
 }
 
 
-void xor_distance(uint8_t own_node[KEY_SIZE], uint8_t other_node[KEY_SIZE], uint8_t distance[KEY_SIZE]) {
-        for (size_t i=0; i< KEY_SIZE; i++) {
+void xor_distance(const uint8_t own_node[KEY_SIZE], const uint8_t other_node[KEY_SIZE], uint8_t distance[KEY_SIZE]) {
+        for (size_t i=0; i< KEY_SIZE; i++)
                 distance[i] = own_node[i] ^ other_node[i];
-        }
 }
 
 
 int compare_nodes(const void *a, const void *b) {
-
         const uint8_t* entry_A = a;
         const uint8_t* entry_B = b;
 
@@ -40,7 +39,9 @@ int compare_nodes(const void *a, const void *b) {
 }
 
 
-void add_node_to_k_bucket(Table* table, uint8_t other_node[KEY_SIZE]) {
+void add_node_to_k_bucket(Table* table, const uint8_t other_node[KEY_SIZE]) {
+        if (table->index >= KEY_SIZE) return;
+
         table->K_bucket[table->index][0] = table->id;
 
         xor_distance(table->own_node, other_node, table->distance);
@@ -66,22 +67,6 @@ void print_k_bucket(const Table* table) {
         }
 }
 
-/*
-char* hex_to_binary(const Table* table) {
-        static char binary[KEY_SIZE * 8 + 1];
-
-        uint8_t pos = 0;
-        for (uint16_t i=0; i< KEY_SIZE; i++) {
-                for (int8_t b=7; b>=0; b--) {
-                        binary[pos++] = (table->distance[i] >> b) & 1 ? '1' : '0' ;
-                }
-                binary[pos++] = ' ';
-        }
-
-        binary[pos] = '\0';
-        return binary;
-}
-*/
 
 int main(void) {
         printf("Hash Table\n");
@@ -169,16 +154,6 @@ int main(void) {
         add_node_to_k_bucket(&table, node10);
 
         print_k_bucket(&table);
-
-
-        //print_k_bucket(table);
-
-
-
-        //xor_distance(table);
-        //print_hex_array(table->distance, "Distance");
-
-        //add_node_to_bucket(table);
-        //print_k_bucket(table);
+        
 }
 
