@@ -20,24 +20,26 @@
 
 #define KEY_SIZE 20
 #define BUCKET_SIZE 160
+#define START_INDEX 1
+
+
 
 typedef struct {
         uint8_t own_node[KEY_SIZE];
-        uint8_t other_node[KEY_SIZE];
         uint8_t distance[KEY_SIZE];
         uint8_t id;
         int K_bucket[BUCKET_SIZE][2];
         uint8_t index;
-
 } Table;
 
 
 
-Table* init_table(void);
+void init_table(Table* table);
 void delete_table(Table* table);
 
-void xor_distance(Table* table, uint8_t node[KEY_SIZE]);
-void add_node_to_k_bucket(Table* table);
+void xor_distance(uint8_t own_node[KEY_SIZE], uint8_t other_node[KEY_SIZE], uint8_t distance[KEY_SIZE]);
+int compare_nodes(const void *a, const void *b);
+void add_node_to_k_bucket(Table* table, uint8_t other_node[KEY_SIZE]);
 
 void print_k_bucket(const Table* table);
 void print_hex_array(uint8_t val[], const char* value);
