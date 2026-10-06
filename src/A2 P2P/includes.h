@@ -16,7 +16,11 @@
 typedef uint32_t ipv4_t;
 typedef uint16_t port_t;
 
-#define INET_ADDR(i1, i2, i3, i4) (htonl((i1 << 24) | (i2 << 16) | (i3 << 8) | (i4 << 0))
+#define INET_ADDR(i1, i2, i3, i4) \
+    htonl(((uint32_t)(uint8_t)(i1) << 24) | \
+          ((uint32_t)(uint8_t)(i2) << 16) | \
+          ((uint32_t)(uint8_t)(i3) << 8)  | \
+           (uint32_t)(uint8_t)(i4))
 
 
 static void handle_errors() {

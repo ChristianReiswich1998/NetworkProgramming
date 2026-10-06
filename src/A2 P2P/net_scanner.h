@@ -17,6 +17,8 @@
 #include <arpa/inet.h>
 #include <net/if.h>
 
+#define MAX_PORTS 1024
+
 
 typedef struct {
         struct ifaddrs* ifaddr;
@@ -27,5 +29,6 @@ typedef struct {
 
 void init_net_scanner(NetScanner* net_scanner);
 void delete_net_scanner(NetScanner* net_scanner);
-void get_local_ip(NetScanner* net_scanner);
+void scan_local_ip(NetScanner* net_scanner);
+void scan_open_ports(const NetScanner* net_scanner);
 
