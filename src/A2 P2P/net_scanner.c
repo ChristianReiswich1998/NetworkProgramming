@@ -42,25 +42,42 @@ void scan_local_ip(NetScanner* net_scanner) {
 }
 
 
-void scan_open_ports(const NetScanner* net_scanner) {
+void scan_open_ports(NetScanner* net_scanner) {
         int sock_fd;
         struct sockaddr_in addr;
-
+        memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
         inet_pton(addr.sin_family, net_scanner->host, &addr.sin_addr.s_addr);
 
-        for (int i=1; i< MAX_PORTS; i++) {
+        for (int i=MAX_PORTS; i>= 1; i--) {
                 if ((sock_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
                         handle_errors();
 
                 addr.sin_port = htons(i);
 
-                if (connect(sock_fd, (struct sockaddr*)&addr, sizeof(addr)) == 0)
-                        printf("Port: %d\n", i);
+                if (connect(sock_fd, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+                        //printf("Open Ports: %i\n", i);
+                        if (i >= 10000) {
+                                net_scanner->port = i;
+                                break;
+                        }
+
+                        if (i > 1024) {
+                                net_scanner->port = i;
+                                break;
+                        }
+
+                        net_scanner->port = i;
+                        break;
+                }
 
                 close(sock_fd);
         }
+
+        printf("Taken Port: %i\n", net_scanner->port);
 }
+
+
 
 
 int main(void) {

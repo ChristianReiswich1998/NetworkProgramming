@@ -7,6 +7,7 @@
 #pragma once
 
 #include "includes.h"
+#include "net_scanner.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
