@@ -28,13 +28,22 @@ typedef enum {
         //numbers are used to distinguish the traffic, i.e., which traffic belongs to which IP address.
 } Nat_type;
 
+typedef enum  {
+        PORT_INVALID, // > 0 : Invalid Ports
+        PORT_SYSTEM,  // 0 -> 1023 : System Ports/Well Known Ports
+        PORT_USER,    // 1024 -> 49151 : User Ports/Registered Ports
+        PORT_DYNAMIC  // 49152 -> 65535 : Dynamic Ports/Private Port
+}Port_type;
+
 
 typedef struct {
         struct ifaddrs* ifaddr;
         struct ifaddrs* ifa;
         char host[INET_ADDRSTRLEN];
         int port;
+        char mac_addr[30];
         Nat_type nat_type;
+        Port_type port_type;
 } NetScanner;
 
 

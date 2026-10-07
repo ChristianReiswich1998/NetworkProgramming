@@ -59,16 +59,20 @@ void scan_open_ports(NetScanner* net_scanner) {
                         //printf("Open Ports: %i\n", i);
                         if (i >= 10000) {
                                 net_scanner->port = i;
+                                net_scanner->port_type = PORT_DYNAMIC;
                                 break;
                         }
 
                         if (i > 1024) {
                                 net_scanner->port = i;
+                                net_scanner->port_type = PORT_USER;
                                 break;
                         }
 
                         net_scanner->port = i;
+                        net_scanner->port_type = PORT_SYSTEM;
                         break;
+
                 }
 
                 close(sock_fd);

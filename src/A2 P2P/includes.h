@@ -23,6 +23,7 @@ typedef uint16_t port_t;
            (uint32_t)(uint8_t)(i4))
 
 
+
 static void handle_errors() {
         perror("ERROR");
         exit(EXIT_FAILURE);
