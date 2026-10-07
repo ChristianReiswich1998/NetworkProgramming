@@ -34,12 +34,13 @@
     #error "Not supported OS"
 #endif
 
-
+#define CON_CLOSED 0
+#define CON_ERROR  -1
 #define MAX_EVENTS 64
 
 
 typedef struct {
-        int server_fd;
+        unsigned long server_fd;
         int client_fd;
         int epoll_fd; // OS: Linux
         int kqueue_fd; // OS: MacOs, BSD
@@ -48,14 +49,16 @@ typedef struct {
         struct sockaddr_in addr;
         pthread_mutex_t lock;
         pthread_cond_t  ok_to_send; // Condition: Client ok to send
-        int port;
+        const char* server_ip;
+        char* server_port;
 } Bootstrap_node;
 
 
 Bootstrap_node* init_node(void);
 void delete_node(Bootstrap_node* node);
+void handle_errors(void);
 void* run_server(void *arg);
-void run_client(Bootstrap_node* node, const char* server_ip);
+void run_client(Bootstrap_node* node);
 void run_event_loop(Bootstrap_node* node);
 void handle_client_data(Bootstrap_node* node);
 

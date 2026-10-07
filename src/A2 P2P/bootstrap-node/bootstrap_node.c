@@ -8,8 +8,6 @@
 #include "bootstrap_node.h"
 #include <stdbool.h>
 
-#include "../includes.h"
-
 
 Bootstrap_node* init_node(void) {
         Bootstrap_node* node = malloc(sizeof(Bootstrap_node));
@@ -30,6 +28,12 @@ void delete_node(Bootstrap_node* node) {
         pthread_mutex_destroy(&node->lock);
         pthread_cond_destroy(&node->ok_to_send);
         free(node);
+}
+
+
+void handle_errors(void) {
+        perror("ERROR");
+        exit(EXIT_FAILURE);
 }
 
 
@@ -93,7 +97,7 @@ void run_event_loop(Bootstrap_node* node) {
                 close(node->kqueue_fd);
         }
 
-        while (1) {
+        for (;;) {
                 const int num_events = kevent(node->kqueue_fd, NULL, 0, events, 10, NULL);
                 if (num_events == -1) {
                         handle_errors();
@@ -115,14 +119,14 @@ void run_event_loop(Bootstrap_node* node) {
                         } else {
                                 char buf[1024] = {0};
                                 const ssize_t recv_bytes = recv(events[i].ident, buf, sizeof(buf) - 1, 0);
-
+                                
                                 if (recv_bytes > 0) {
                                         buf[recv_bytes] = '\0';
                                         printf("Server Node: %s\n", buf);
                                 }
 
                                 else if (recv_bytes == 0) {
-                                        printf("Connection is closed!\n");
+                                        printf("Event: Connection is closed!\n");
                                         close(events[i].ident);
                                 }
 
@@ -153,9 +157,9 @@ void* run_server(void *arg) {
         }
 
         memset(&node->addr, 0, sizeof(node->addr));
-        node->addr.sin_family      = AF_INET;
-        node->addr.sin_port        = htons(node->port);
-        node->addr.sin_addr.s_addr = INADDR_ANY;
+        node->addr.sin_family = AF_INET; //IPv4 Format
+        inet_pton(node->addr.sin_family, node->server_ip, &node->addr.sin_addr.s_addr); // IP ADDR
+        node->addr.sin_port = htons((uint16_t)atoi(node->server_port)); // PORT NUM
 
         if (bind(node->server_fd, (struct sockaddr*)&node->addr, sizeof(node->addr)) < 0)
                 handle_errors();
@@ -168,7 +172,7 @@ void* run_server(void *arg) {
         pthread_cond_signal(&node->ok_to_send);
         pthread_mutex_unlock(&node->lock);
 
-        printf("[Server] Node listening on port %i\n", node->port);
+        printf("[Server] Node listening on port %i\n", (uint16_t)atoi(node->server_port));
 
         run_event_loop(node);
 
@@ -181,33 +185,31 @@ void* run_server(void *arg) {
 }
 
 
-void run_client(Bootstrap_node* node, const char* server_ip) {
+void run_client(Bootstrap_node* node) {
         pthread_mutex_lock(&node->lock);
-        while (node->is_ready == false) {
+        while (node->is_ready == false)
                 pthread_cond_wait(&node->ok_to_send, &node->lock);
-        }
+
         pthread_mutex_unlock(&node->lock);
 
         if ((node->sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
                 handle_errors();
 
-        struct sockaddr_in server_addr;
-        memset(&server_addr, 0, sizeof(server_addr));
-        server_addr.sin_family = AF_INET;
-        server_addr.sin_port   = htons(node->port);
+        struct sockaddr_in node_addr_in;
+        memset(&node_addr_in, 0, sizeof(node_addr_in));
+        node_addr_in.sin_family = AF_INET;
+        inet_pton(node_addr_in.sin_family, /***Node_A_IP_ADDR***/node->server_ip, &node_addr_in.sin_addr);
+        node_addr_in.sin_port = htons((uint16_t)atoi(node->server_port));
 
-        if (inet_pton(AF_INET, server_ip, &server_addr.sin_addr) <= 0)
-                handle_errors();
-
-        if (connect(node->sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0)
+        if (connect(node->sock, (struct sockaddr*)&node_addr_in, sizeof(node_addr_in)) < 0)
                 handle_errors();
 
         const char* msg = "Hello from client Node!\n";
         ssize_t send_bytes = send(node->sock, msg, strlen(msg), 0);
         ssize_t total_send_bytes = send_bytes;
 
-        while (total_send_bytes < strlen(msg)) {
-                if (send_bytes == - 1) {
+        while (total_send_bytes < (ssize_t)strlen(msg)) {
+                if (send_bytes == -1) {
                         handle_errors();
                         break;
                 }
@@ -248,26 +250,26 @@ void run_client(Bootstrap_node* node, const char* server_ip) {
 
 
 int main(const int argc, char* argv[]) {
-        printf("Starting Bootstrap Node...\n");
-
-        if (argc != 2) {
-                fprintf(stderr, "Usage: <inet_addr> <port>");
+        if (argc != 3) {
+                fprintf(stderr, "Usage: %s<inet_addr> <port>", argv[0]);
                 return 1;
         }
 
-        const char* server_ip = argv[0];
-        const char* port = argv[1];
+        printf("Starting Bootstrap Node...\n");
 
-
-
+        const char* server_ip = argv[1];
+        char* server_port = argv[2];
 
         Bootstrap_node* node = init_node();
+        node->server_ip = server_ip;
+        node->server_port = server_port;
+
         pthread_t server_thread_id;
 
         if (pthread_create(&server_thread_id, NULL, run_server, node) != 0)
                 handle_errors();
 
-        run_client(node, server_ip);
+        run_client(node);
         pthread_join(server_thread_id, NULL);
 
         delete_node(node);
