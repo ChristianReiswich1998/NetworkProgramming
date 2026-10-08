@@ -38,7 +38,7 @@
 #define CON_ERROR  -1
 #define MAX_EVENTS 64
 #define IP_PORT_INPUT_SIZE 1024
-#define IP_SIZE 512
+#define IP_SIZE   512
 #define PORT_SIZE 512
 #define MAX_PORT 65535
 #define MIN_PORT 0
@@ -56,13 +56,16 @@ typedef struct {
         pthread_cond_t  ok_to_send; // Condition: Client ok to send
         const char* server_ip;
         char* server_port;
+        char ip_to[512];
+        char port_to[512];
 } Bootstrap_node;
 
 
 Bootstrap_node* init_node(void);
 void delete_node(Bootstrap_node* node);
 void handle_errors(void);
-void check_valid_input(char input[IP_PORT_INPUT_SIZE]);
+char* check_valid_ip(char input[IP_PORT_INPUT_SIZE]);
+char* check_valid_port(char input[IP_PORT_INPUT_SIZE]);
 void run_event_loop(Bootstrap_node* node);
 void* run_server(void *arg);
 void run_client(Bootstrap_node* node);

@@ -37,29 +37,38 @@ void handle_errors(void) {
 }
 
 
-void check_valid_input(char input[IP_PORT_INPUT_SIZE]) {
-        char ip[IP_SIZE] = {0};
-        char port[PORT_SIZE] = {0};
+char* check_valid_ip(char input[IP_PORT_INPUT_SIZE]) {
+        static char ip_to[IP_SIZE];
         struct sockaddr_in ip_addr = {0};
 
-        const char* ip_port = strchr(input, ':');
-        if (ip_port == NULL)
+        const char* port = strchr(input, ':');
+        if (port == NULL)
                 handle_errors();
 
-        strncpy(ip, input, strlen(input) - strlen(ip_port));
-        ip[strlen(input) - strlen(ip_port)] = '\0';
+        strncpy(ip_to, input, strlen(input) - strlen(port));
+        ip_to[strlen(input) - strlen(port)] = '\0';
 
-        strncpy(port, ip_port + 1, strlen(ip_port + 1));
-        port[strlen(ip_port)] = '\0';
-
-        if (inet_pton(AF_INET, ip, &ip_addr) != 1)
+        if (inet_pton(AF_INET, ip_to, &ip_addr) != 1)
                 handle_errors();
 
-        if (atoi(port) < MIN_PORT || atoi(port) > MAX_PORT)
+        return ip_to;
+}
+
+
+char* check_valid_port(char input[IP_PORT_INPUT_SIZE]) {
+        static char port_to[PORT_SIZE];
+
+        const char* port = strchr(input, ':');
+        if (port == NULL)
                 handle_errors();
 
-        printf("IP: %s\n", ip);
-        printf("PORT: %s\n", port);
+        strncpy(port_to, port + 1, strlen(port + 1));
+        port_to[strlen(port)] = '\0';
+
+        if (atoi(port_to) < MIN_PORT || atoi(port_to) > MAX_PORT)
+                handle_errors();
+
+        return port_to;
 }
 
 
@@ -150,7 +159,12 @@ void run_event_loop(Bootstrap_node* node) {
                                 if (recv_bytes > 0) {
                                         buf[recv_bytes] = '\0';
                                         printf("[Server got]: %s\n", buf);
-                                        check_valid_input(buf);
+                                        const char* ip = check_valid_ip(buf);
+                                        const char* port = check_valid_port(buf);
+
+                                        printf("IP: %s\n", ip);
+                                        printf("Port: %s\n", port);
+
                                         printf("[Server got end]\n");
                                 }
 
@@ -229,8 +243,8 @@ void run_client(Bootstrap_node* node) {
         struct sockaddr_in node_addr_in;
         memset(&node_addr_in, 0, sizeof(node_addr_in));
         node_addr_in.sin_family = AF_INET;
-        inet_pton(node_addr_in.sin_family, /***Node_A_IP_ADDR***/node->server_ip, &node_addr_in.sin_addr);
-        node_addr_in.sin_port = htons((uint16_t)atoi(node->server_port));
+        inet_pton(node_addr_in.sin_family, /***Node_A_IP_ADDR***/node->ip_to, &node_addr_in.sin_addr);
+        node_addr_in.sin_port = htons((uint16_t)atoi(node->port_to));
 
         if (connect(node->sock, (struct sockaddr*)&node_addr_in, sizeof(node_addr_in)) < 0)
                 handle_errors();
