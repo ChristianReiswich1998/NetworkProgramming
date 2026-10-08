@@ -37,6 +37,32 @@ void handle_errors(void) {
 }
 
 
+void check_valid_input(char input[IP_PORT_INPUT_SIZE]) {
+        char ip[IP_SIZE] = {0};
+        char port[PORT_SIZE] = {0};
+        struct sockaddr_in ip_addr = {0};
+
+        const char* ip_port = strchr(input, ':');
+        if (ip_port == NULL)
+                handle_errors();
+
+        strncpy(ip, input, strlen(input) - strlen(ip_port));
+        ip[strlen(input) - strlen(ip_port)] = '\0';
+
+        strncpy(port, ip_port + 1, strlen(ip_port + 1));
+        port[strlen(ip_port)] = '\0';
+
+        if (inet_pton(AF_INET, ip, &ip_addr) != 1)
+                handle_errors();
+
+        if (atoi(port) < MIN_PORT || atoi(port) > MAX_PORT)
+                handle_errors();
+
+        printf("IP: %s\n", ip);
+        printf("PORT: %s\n", port);
+}
+
+
 void run_event_loop(Bootstrap_node* node) {
 #if defined(__linux__)
         node->epoll_fd = epoll_create(1);
@@ -113,20 +139,25 @@ void run_event_loop(Bootstrap_node* node) {
                                 if (node->client_fd < 0)
                                         handle_errors();
                                 else {
+                                        fcntl(node->client_fd, F_SETFL, fcntl(node->client_fd, F_GETFL, 0) | O_NONBLOCK);
                                         EV_SET(&change, node->client_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
                                         kevent(node->kqueue_fd, &change, 1, NULL, 0, NULL);
                                 }
                         } else {
-                                char buf[1024] = {0};
-                                const ssize_t recv_bytes = recv(events[i].ident, buf, sizeof(buf) - 1, 0);
-                                
+                                char buf[IP_PORT_INPUT_SIZE] = {0};
+                                const ssize_t recv_bytes = recv(events[i].ident, buf, sizeof(buf) -1 , 0);
+
                                 if (recv_bytes > 0) {
                                         buf[recv_bytes] = '\0';
-                                        printf("Server Node: %s\n", buf);
+                                        printf("[Server got]: %s\n", buf);
+                                        check_valid_input(buf);
+                                        printf("[Server got end]\n");
                                 }
 
                                 else if (recv_bytes == 0) {
                                         printf("Event: Connection is closed!\n");
+                                        EV_SET(&change, events[i].ident, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+                                        kevent(node->kqueue_fd, &change, 1, NULL, 0, NULL);
                                         close(events[i].ident);
                                 }
 
@@ -269,7 +300,7 @@ int main(const int argc, char* argv[]) {
         if (pthread_create(&server_thread_id, NULL, run_server, node) != 0)
                 handle_errors();
 
-        run_client(node);
+        //run_client(node);
         pthread_join(server_thread_id, NULL);
 
         delete_node(node);

@@ -37,6 +37,11 @@
 #define CON_CLOSED 0
 #define CON_ERROR  -1
 #define MAX_EVENTS 64
+#define IP_PORT_INPUT_SIZE 1024
+#define IP_SIZE 512
+#define PORT_SIZE 512
+#define MAX_PORT 65535
+#define MIN_PORT 0
 
 
 typedef struct {
@@ -57,10 +62,12 @@ typedef struct {
 Bootstrap_node* init_node(void);
 void delete_node(Bootstrap_node* node);
 void handle_errors(void);
+void check_valid_input(char input[IP_PORT_INPUT_SIZE]);
+void run_event_loop(Bootstrap_node* node);
 void* run_server(void *arg);
 void run_client(Bootstrap_node* node);
-void run_event_loop(Bootstrap_node* node);
 void handle_client_data(Bootstrap_node* node);
+
 
 
 
