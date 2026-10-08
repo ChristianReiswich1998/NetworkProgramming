@@ -12,7 +12,7 @@
 Bootstrap_node* init_node(void) {
         Bootstrap_node* node = malloc(sizeof(Bootstrap_node));
         if (node == NULL)
-                handle_errors();
+                handle_errors(15);
 
         memset(node, 0, sizeof(Bootstrap_node));
         pthread_mutex_init(&node->lock, NULL);
@@ -31,7 +31,8 @@ void delete_node(Bootstrap_node* node) {
 }
 
 
-void handle_errors(void) {
+void handle_errors(const int line) {
+        printf("%i ", line);
         perror("ERROR");
         exit(EXIT_FAILURE);
 }
@@ -43,13 +44,13 @@ char* check_valid_ip(char input[IP_PORT_INPUT_SIZE]) {
 
         const char* port = strchr(input, ':');
         if (port == NULL)
-                handle_errors();
+                handle_errors(47);
 
         strncpy(ip_to, input, strlen(input) - strlen(port));
         ip_to[strlen(input) - strlen(port)] = '\0';
 
         if (inet_pton(AF_INET, ip_to, &ip_addr) != 1)
-                handle_errors();
+                handle_errors(53);
 
         return ip_to;
 }
@@ -60,13 +61,13 @@ char* check_valid_port(char input[IP_PORT_INPUT_SIZE]) {
 
         const char* port = strchr(input, ':');
         if (port == NULL)
-                handle_errors();
+                handle_errors(64);
 
         strncpy(port_to, port + 1, strlen(port + 1));
         port_to[strlen(port)] = '\0';
 
         if (atoi(port_to) < MIN_PORT || atoi(port_to) > MAX_PORT)
-                handle_errors();
+                handle_errors(70);
 
         return port_to;
 }
@@ -84,7 +85,7 @@ void run_event_loop(Bootstrap_node* node) {
         while (1) {
                 const int num_events = epoll_wait(node->epoll_fd, events, MAX_EVENTS, -1);
                 if (num_events == -1) {
-                        handle_errors("ERROR");
+                        handle_errors(88);
                         break;
                 }
 
@@ -95,7 +96,7 @@ void run_event_loop(Bootstrap_node* node) {
 
                                 node->client_fd = accept(node->server_fd, (struct sockaddr*)&client_addr, &client_len);
                                 if (node->client_fd < 0)
-                                        handle_errors("ERROR");
+                                        handle_errors(99);
                                 else {
                                         event.data.fd = node->client_fd;
                                         epoll_ctl(node->epoll_fd, EPOLL_CTL_ADD, node->client_fd, &event);
@@ -115,27 +116,27 @@ void run_event_loop(Bootstrap_node* node) {
                                 }
 
                                 else if (recv_bytes < 0)
-                                        handle_errors("ERROR");
+                                        handle_errors(119);
                         }
                 }
         }
 
 #elif defined(__APPLE__)
         if ((node->kqueue_fd = kqueue()) < 0)
-                handle_errors();
+                handle_errors(126);
         struct kevent change;
         struct kevent events[MAX_EVENTS];
         EV_SET(&change, node->server_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
 
         if (kevent(node->kqueue_fd, &change, 1, NULL, 0, NULL) < 0) {
-                handle_errors();
+                handle_errors(132);
                 close(node->kqueue_fd);
         }
 
         for (;;) {
                 const int num_events = kevent(node->kqueue_fd, NULL, 0, events, 10, NULL);
                 if (num_events == -1) {
-                        handle_errors();
+                        handle_errors(139);
                         break;
                 }
 
@@ -146,7 +147,7 @@ void run_event_loop(Bootstrap_node* node) {
 
                                 node->client_fd = accept(node->server_fd, (struct sockaddr*)&client_addr, &client_len);
                                 if (node->client_fd < 0)
-                                        handle_errors();
+                                        handle_errors(150);
                                 else {
                                         fcntl(node->client_fd, F_SETFL, fcntl(node->client_fd, F_GETFL, 0) | O_NONBLOCK);
                                         EV_SET(&change, node->client_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
@@ -161,9 +162,10 @@ void run_event_loop(Bootstrap_node* node) {
                                         printf("[Server got]: %s\n", buf);
                                         const char* ip = check_valid_ip(buf);
                                         const char* port = check_valid_port(buf);
-
                                         printf("IP: %s\n", ip);
                                         printf("Port: %s\n", port);
+
+                                        run_client(node, ip, port);
 
                                         printf("[Server got end]\n");
                                 }
@@ -176,7 +178,7 @@ void run_event_loop(Bootstrap_node* node) {
                                 }
 
                                 else if (recv_bytes < 0)
-                                        handle_errors();
+                                        handle_errors(182);
                         }
                 }
         }
@@ -190,15 +192,15 @@ void* run_server(void *arg) {
         Bootstrap_node* node = arg;
 
         if ((node->server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-                handle_errors();
+                handle_errors(195);
 
         if (fcntl(node->server_fd, F_SETFL, fcntl(node->server_fd, F_GETFL, 0) | O_NONBLOCK) == -1) {
-                handle_errors();
+                handle_errors(195);
         }
 
         const int opt = 1;
         if (setsockopt(node->server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-                handle_errors();
+                handle_errors(195);
         }
 
         memset(&node->addr, 0, sizeof(node->addr));
@@ -207,10 +209,10 @@ void* run_server(void *arg) {
         node->addr.sin_port = htons((uint16_t)atoi(node->server_port)); // PORT NUM
 
         if (bind(node->server_fd, (struct sockaddr*)&node->addr, sizeof(node->addr)) < 0)
-                handle_errors();
+                handle_errors(212);
 
         if (listen(node->server_fd, 5) < 0)
-                handle_errors();
+                handle_errors(215);
 
         pthread_mutex_lock(&node->lock);
         node->is_ready = true;
@@ -230,7 +232,7 @@ void* run_server(void *arg) {
 }
 
 
-void run_client(Bootstrap_node* node) {
+void run_client(Bootstrap_node* node, const char* ip_to, const char* port_to) {
         pthread_mutex_lock(&node->lock);
         while (node->is_ready == false)
                 pthread_cond_wait(&node->ok_to_send, &node->lock);
@@ -238,29 +240,38 @@ void run_client(Bootstrap_node* node) {
         pthread_mutex_unlock(&node->lock);
 
         if ((node->sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-                handle_errors();
+                handle_errors(243);
 
         struct sockaddr_in node_addr_in;
         memset(&node_addr_in, 0, sizeof(node_addr_in));
         node_addr_in.sin_family = AF_INET;
-        inet_pton(node_addr_in.sin_family, /***Node_A_IP_ADDR***/node->ip_to, &node_addr_in.sin_addr);
-        node_addr_in.sin_port = htons((uint16_t)atoi(node->port_to));
+        inet_pton(node_addr_in.sin_family, /***Node_A_IP_ADDR***/ip_to, &node_addr_in.sin_addr);
+        node_addr_in.sin_port = htons((uint16_t)atoi(port_to));
 
         if (connect(node->sock, (struct sockaddr*)&node_addr_in, sizeof(node_addr_in)) < 0)
-                handle_errors();
+                handle_errors(252);
 
-        const char* msg = "Hello from client Node!\n";
+        const char* header = "[Bootstrap Node 5 Addr]:\n";
+        const char* addr1 = "185.142.93.12:49152\n";
+        const char* addr2 = "79.210.114.50:51234\n";
+        const char* addr3 = "192.168.1.105:58901\n";
+        const char* addr4 = "104.28.19.231:60211\n";
+        const char* addr5 = "45.133.8.19:54321\n";
+
+        char msg[1024] = {0};
+        snprintf(msg, sizeof(msg),"%s %s %s %s %s %s", header, addr1, addr2, addr3, addr4, addr5);
+
         ssize_t send_bytes = send(node->sock, msg, strlen(msg), 0);
         ssize_t total_send_bytes = send_bytes;
 
         while (total_send_bytes < (ssize_t)strlen(msg)) {
                 if (send_bytes == -1) {
-                        handle_errors();
+                        handle_errors(260);
                         break;
                 }
 
                 if (send_bytes == 0) {
-                        handle_errors();
+                        handle_errors(265);
                         break;
                 }
 
@@ -285,7 +296,7 @@ void run_client(Bootstrap_node* node) {
         }
 
         else if (recv_bytes < 0)
-                handle_errors();
+                handle_errors(290);
 
         close(node->sock);
 }
@@ -312,7 +323,7 @@ int main(const int argc, char* argv[]) {
         pthread_t server_thread_id;
 
         if (pthread_create(&server_thread_id, NULL, run_server, node) != 0)
-                handle_errors();
+                handle_errors(317);
 
         //run_client(node);
         pthread_join(server_thread_id, NULL);

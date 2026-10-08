@@ -63,12 +63,12 @@ typedef struct {
 
 Bootstrap_node* init_node(void);
 void delete_node(Bootstrap_node* node);
-void handle_errors(void);
+void handle_errors(int line);
 char* check_valid_ip(char input[IP_PORT_INPUT_SIZE]);
 char* check_valid_port(char input[IP_PORT_INPUT_SIZE]);
 void run_event_loop(Bootstrap_node* node);
 void* run_server(void *arg);
-void run_client(Bootstrap_node* node);
+void run_client(Bootstrap_node* node, const char* ip_to, const char* port_to);
 void handle_client_data(Bootstrap_node* node);
 
 
